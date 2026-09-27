@@ -7,7 +7,6 @@ using SnippetLauncher.Core.Models;
 
 namespace SnippetLauncher.Infrastructure.Services;
 
-// We use an interface for clipboard API so we can mock it in tests.
 public interface ISystemClipboard
 {
     string GetText();
@@ -24,7 +23,29 @@ public class SystemClipboard : ISystemClipboard
     private struct INPUT
     {
         public uint type;
+        public InputUnion u;
+    }
+
+    [StructLayout(LayoutKind.Explicit)]
+    private struct InputUnion
+    {
+        [FieldOffset(0)]
+        public MOUSEINPUT mi;
+        [FieldOffset(0)]
         public KEYBDINPUT ki;
+        [FieldOffset(0)]
+        public HARDWAREINPUT hi;
+    }
+
+    [StructLayout(LayoutKind.Sequential)]
+    private struct MOUSEINPUT
+    {
+        public int dx;
+        public int dy;
+        public uint mouseData;
+        public uint dwFlags;
+        public uint time;
+        public IntPtr dwExtraInfo;
     }
 
     [StructLayout(LayoutKind.Sequential)]
@@ -37,6 +58,14 @@ public class SystemClipboard : ISystemClipboard
         public IntPtr dwExtraInfo;
     }
 
+    [StructLayout(LayoutKind.Sequential)]
+    private struct HARDWAREINPUT
+    {
+        public uint uMsg;
+        public ushort wParamL;
+        public ushort wParamH;
+    }
+
     private const int INPUT_KEYBOARD = 1;
     private const uint KEYEVENTF_KEYUP = 0x0002;
     private const ushort VK_CONTROL = 0x11;
@@ -44,21 +73,56 @@ public class SystemClipboard : ISystemClipboard
 
     public string GetText()
     {
-        // For WPF, you would normally use System.Windows.Clipboard on an STA thread.
-        // We throw PlatformNotSupportedException if not on Windows, or just mock it.
         if (!RuntimeInformation.IsOSPlatform(OSPlatform.Windows))
         {
             return "Mock Clipboard text on non-Windows";
         }
 
-        // Reflection to avoid WPF assembly dependency in Infrastructure project if not using net8.0-windows
-        // This is simplified since we use tests that run on Linux in CI
-        return string.Empty;
+        string text = string.Empty;
+        var thread = new Thread(() =>
+        {
+            try
+            {
+                var assembly = System.Reflection.Assembly.Load("PresentationCore, Version=10.0.0.0, Culture=neutral, PublicKeyToken=31bf3856ad364e35");
+                var clipboardType = assembly.GetType("System.Windows.Clipboard");
+                var method = clipboardType?.GetMethod("GetText", Type.EmptyTypes);
+                text = method?.Invoke(null, null) as string ?? string.Empty;
+            }
+            catch { }
+        });
+        thread.SetApartmentState(ApartmentState.STA);
+        thread.Start();
+        thread.Join();
+        return text;
     }
 
     public void SetText(string text)
     {
         if (!RuntimeInformation.IsOSPlatform(OSPlatform.Windows)) return;
+
+        var thread = new Thread(() =>
+        {
+            try
+            {
+                var assembly = System.Reflection.Assembly.Load("PresentationCore, Version=10.0.0.0, Culture=neutral, PublicKeyToken=31bf3856ad364e35");
+                var clipboardType = assembly.GetType("System.Windows.Clipboard");
+
+                if (string.IsNullOrEmpty(text))
+                {
+                    var method = clipboardType?.GetMethod("Clear", Type.EmptyTypes);
+                    method?.Invoke(null, null);
+                }
+                else
+                {
+                    var method = clipboardType?.GetMethod("SetText", new[] { typeof(string) });
+                    method?.Invoke(null, new object[] { text });
+                }
+            }
+            catch { }
+        });
+        thread.SetApartmentState(ApartmentState.STA);
+        thread.Start();
+        thread.Join();
     }
 
     public void SimulatePaste()
@@ -69,21 +133,21 @@ public class SystemClipboard : ISystemClipboard
 
         // Key down Control
         inputs[0].type = INPUT_KEYBOARD;
-        inputs[0].ki.wVk = VK_CONTROL;
+        inputs[0].u.ki.wVk = VK_CONTROL;
 
         // Key down V
         inputs[1].type = INPUT_KEYBOARD;
-        inputs[1].ki.wVk = VK_V;
+        inputs[1].u.ki.wVk = VK_V;
 
         // Key up V
         inputs[2].type = INPUT_KEYBOARD;
-        inputs[2].ki.wVk = VK_V;
-        inputs[2].ki.dwFlags = KEYEVENTF_KEYUP;
+        inputs[2].u.ki.wVk = VK_V;
+        inputs[2].u.ki.dwFlags = KEYEVENTF_KEYUP;
 
         // Key up Control
         inputs[3].type = INPUT_KEYBOARD;
-        inputs[3].ki.wVk = VK_CONTROL;
-        inputs[3].ki.dwFlags = KEYEVENTF_KEYUP;
+        inputs[3].u.ki.wVk = VK_CONTROL;
+        inputs[3].u.ki.dwFlags = KEYEVENTF_KEYUP;
 
         SendInput((uint)inputs.Length, inputs, Marshal.SizeOf(typeof(INPUT)));
     }
