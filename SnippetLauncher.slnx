@@ -1,0 +1,6 @@
+<Solution>
+  <Project Path="SnippetLauncher.Core/SnippetLauncher.Core.csproj" />
+  <Project Path="SnippetLauncher.Infrastructure/SnippetLauncher.Infrastructure.csproj" />
+  <Project Path="SnippetLauncher.Tests/SnippetLauncher.Tests.csproj" />
+  <Project Path="SnippetLauncher.UI/SnippetLauncher.UI.csproj" />
+</Solution>
