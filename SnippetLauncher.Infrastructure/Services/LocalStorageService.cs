@@ -8,10 +8,17 @@ public class LocalStorageService : IStorageService
 {
     private readonly string _storageDirectory;
 
-    public LocalStorageService()
+    public LocalStorageService(string customPath = "")
     {
-        var localAppData = Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData);
-        _storageDirectory = Path.Combine(localAppData, "SnippetLauncher", "snippets");
+        if (!string.IsNullOrEmpty(customPath))
+        {
+            _storageDirectory = customPath;
+        }
+        else
+        {
+            var localAppData = Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData);
+            _storageDirectory = Path.Combine(localAppData, "SnippetLauncher", "snippets");
+        }
     }
 
     public string GetStorageDirectory() => _storageDirectory;

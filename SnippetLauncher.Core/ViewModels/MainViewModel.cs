@@ -8,7 +8,7 @@ using CommunityToolkit.Mvvm.Input;
 using SnippetLauncher.Core.Interfaces;
 using SnippetLauncher.Core.Models;
 
-namespace SnippetLauncher.UI.ViewModels;
+namespace SnippetLauncher.Core.ViewModels;
 
 public partial class MainViewModel : ObservableObject
 {

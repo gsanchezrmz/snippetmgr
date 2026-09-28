@@ -12,6 +12,7 @@ public interface ISystemClipboard
     string GetText();
     void SetText(string text);
     void SimulatePaste();
+    bool ContainsText();
 }
 
 public class SystemClipboard : ISystemClipboard
@@ -70,6 +71,32 @@ public class SystemClipboard : ISystemClipboard
     private const uint KEYEVENTF_KEYUP = 0x0002;
     private const ushort VK_CONTROL = 0x11;
     private const ushort VK_V = 0x56;
+
+    public bool ContainsText()
+    {
+        if (!RuntimeInformation.IsOSPlatform(OSPlatform.Windows))
+        {
+            return true; // Mock true for tests on Linux
+        }
+
+        bool hasText = false;
+        var thread = new Thread(() =>
+        {
+            try
+            {
+                var assembly = System.Reflection.Assembly.Load("PresentationCore, Version=10.0.0.0, Culture=neutral, PublicKeyToken=31bf3856ad364e35");
+                var clipboardType = assembly.GetType("System.Windows.Clipboard");
+                var method = clipboardType?.GetMethod("ContainsText", Type.EmptyTypes);
+                var result = method?.Invoke(null, null);
+                if (result is bool b) hasText = b;
+            }
+            catch { }
+        });
+        thread.SetApartmentState(ApartmentState.STA);
+        thread.Start();
+        thread.Join();
+        return hasText;
+    }
 
     public string GetText()
     {
@@ -166,8 +193,15 @@ public class ClipboardManager : IClipboardManager
 
     public async Task InjectSnippetAsync(Snippet snippet)
     {
-        // 1. Save current clipboard
-        var currentClipboard = _systemClipboard.GetText();
+        // 1. Save current clipboard only if it's text (ignore files, images to save memory/avoid crashes)
+        string currentClipboard = string.Empty;
+        bool hasTextBackup = false;
+
+        if (_systemClipboard.ContainsText())
+        {
+            currentClipboard = _systemClipboard.GetText();
+            hasTextBackup = true;
+        }
 
         // 2. Parse variables
         var parsedContent = _parser.Parse(snippet.Content, currentClipboard);
@@ -181,7 +215,14 @@ public class ClipboardManager : IClipboardManager
         // 5. Short delay to ensure paste went through
         await Task.Delay(100);
 
-        // 6. Restore original clipboard
-        _systemClipboard.SetText(currentClipboard);
+        // 6. Restore original clipboard if we had one
+        if (hasTextBackup)
+        {
+            _systemClipboard.SetText(currentClipboard);
+        }
+        else
+        {
+            _systemClipboard.SetText(string.Empty); // clear if it was an image/file
+        }
     }
 }

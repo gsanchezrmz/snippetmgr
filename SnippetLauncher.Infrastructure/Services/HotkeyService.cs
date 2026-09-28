@@ -6,7 +6,6 @@ namespace SnippetLauncher.Infrastructure.Services;
 
 public class HotkeyService : IHotkeyService
 {
-    // Simplified Hotkey implementation for Windows
     [DllImport("user32.dll")]
     private static extern bool RegisterHotKey(IntPtr hWnd, int id, uint fsModifiers, uint vk);
 
@@ -14,9 +13,6 @@ public class HotkeyService : IHotkeyService
     private static extern bool UnregisterHotKey(IntPtr hWnd, int id);
 
     private const int HOTKEY_ID = 9000;
-    private const uint MOD_ALT = 0x0001;
-    private const uint MOD_CONTROL = 0x0002;
-    private const uint VK_SPACE = 0x20;
 
     private Action? _onHotkeyTriggered;
     private bool _registered;
@@ -26,21 +22,27 @@ public class HotkeyService : IHotkeyService
     {
         if (!RuntimeInformation.IsOSPlatform(OSPlatform.Windows)) return;
         _onHotkeyTriggered = onHotkeyTriggered;
-        // In real app, we need window handle here, but interface only allows Action.
-        // We added Register(IntPtr, Action) for actual use.
     }
 
-    public void Register(IntPtr windowHandle, Action onHotkeyTriggered)
+    public bool TryRegister(IntPtr windowHandle, Action onHotkeyTriggered, string modifiersStr, string keyStr)
     {
-        if (!RuntimeInformation.IsOSPlatform(OSPlatform.Windows)) return;
+        if (!RuntimeInformation.IsOSPlatform(OSPlatform.Windows)) return false;
+
+        UnregisterGlobalHotkey();
 
         _onHotkeyTriggered = onHotkeyTriggered;
         _windowHandle = windowHandle;
 
-        // HwndSource is WPF specific, so we omit it here in infrastructure which targets net8.0
-        // The WPF app will wire up the hook.
+        uint modifiers = ParseModifiers(modifiersStr);
+        uint key = ParseKey(keyStr);
 
-        _registered = RegisterHotKey(windowHandle, HOTKEY_ID, MOD_ALT | MOD_CONTROL, VK_SPACE);
+        _registered = RegisterHotKey(windowHandle, HOTKEY_ID, modifiers, key);
+        return _registered;
+    }
+
+    public void Register(IntPtr windowHandle, Action onHotkeyTriggered)
+    {
+        TryRegister(windowHandle, onHotkeyTriggered, "Control, Alt", "Space");
     }
 
     public void UnregisterGlobalHotkey()
@@ -51,7 +53,6 @@ public class HotkeyService : IHotkeyService
         _registered = false;
     }
 
-    // Called from MainWindow hook
     public IntPtr ProcessMessage(IntPtr hwnd, int msg, IntPtr wParam, IntPtr lParam, ref bool handled)
     {
         const int WM_HOTKEY = 0x0312;
@@ -61,5 +62,39 @@ public class HotkeyService : IHotkeyService
             handled = true;
         }
         return IntPtr.Zero;
+    }
+
+    private uint ParseModifiers(string modifiersStr)
+    {
+        uint mods = 0;
+        if (string.IsNullOrEmpty(modifiersStr)) return mods;
+
+        var parts = modifiersStr.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+        foreach (var p in parts)
+        {
+            if (p.Equals("Control", StringComparison.OrdinalIgnoreCase)) mods |= 0x0002;
+            else if (p.Equals("Alt", StringComparison.OrdinalIgnoreCase)) mods |= 0x0001;
+            else if (p.Equals("Shift", StringComparison.OrdinalIgnoreCase)) mods |= 0x0004;
+            else if (p.Equals("Win", StringComparison.OrdinalIgnoreCase)) mods |= 0x0008;
+        }
+        return mods;
+    }
+
+    private uint ParseKey(string keyStr)
+    {
+        if (string.IsNullOrEmpty(keyStr)) return 0;
+
+        if (keyStr.Equals("Space", StringComparison.OrdinalIgnoreCase)) return 0x20;
+
+        if (keyStr.Length == 1)
+        {
+            char c = char.ToUpper(keyStr[0]);
+            if (c >= 'A' && c <= 'Z')
+            {
+                return (uint)c;
+            }
+        }
+
+        return 0; // Default or unhandled
     }
 }

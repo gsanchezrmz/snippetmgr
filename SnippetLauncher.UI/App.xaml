@@ -1,10 +1,7 @@
 <Application x:Class="SnippetLauncher.UI.App"
              xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
-             StartupUri="MainWindow.xaml">
-    <!-- Set ShutdownMode to OnExplicitShutdown if we want it to run in background permanently,
-         but we keep it OnMainWindowClose so it's easily killable in test env.
-         We'll hide the window, not close it. -->
+             ShutdownMode="OnExplicitShutdown">
     <Application.Resources>
     </Application.Resources>
 </Application>

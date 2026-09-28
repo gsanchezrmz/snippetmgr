@@ -2,21 +2,34 @@ using System;
 using System.Windows;
 using System.Windows.Input;
 using System.Windows.Interop;
+using SnippetLauncher.Core.Interfaces;
 using SnippetLauncher.Infrastructure.Repositories;
 using SnippetLauncher.Infrastructure.Services;
-using SnippetLauncher.UI.ViewModels;
+using SnippetLauncher.Core.ViewModels;
 
 namespace SnippetLauncher.UI;
 
 public partial class MainWindow : Window
 {
     private readonly HotkeyService _hotkeyService;
+    private readonly ISettingsService _settingsService;
 
+    // Parameterless constructor needed for XAML designer (if strictly needed, though we can omit if careful)
     public MainWindow()
     {
         InitializeComponent();
+    }
 
-        var storage = new LocalStorageService();
+    public MainWindow(ISettingsService settingsService, HotkeyService hotkeyService)
+    {
+        InitializeComponent();
+        _settingsService = settingsService;
+        _hotkeyService = hotkeyService;
+
+        var settings = _settingsService.GetSettings();
+
+        // Custom storage if path configured, otherwise default
+        var storage = new LocalStorageService(settings.SnippetsPath);
         var repository = new LocalSnippetRepository(storage);
         var clipboardManager = new ClipboardManager(new VariableParser(), new SystemClipboard());
 
@@ -26,15 +39,23 @@ public partial class MainWindow : Window
         };
 
         DataContext = viewModel;
-        _hotkeyService = new HotkeyService();
 
-        Loaded += async (s, e) => {
-            var source = HwndSource.FromHwnd(new WindowInteropHelper(this).Handle);
-            source?.AddHook(_hotkeyService.ProcessMessage);
-            _hotkeyService.Register(source!.Handle, ShowWindow);
+        var helper = new WindowInteropHelper(this);
+        helper.EnsureHandle();
 
-            SearchBox.Focus();
-            await viewModel.InitializeAsync();
+        var source = HwndSource.FromHwnd(helper.Handle);
+        source?.AddHook(_hotkeyService.ProcessMessage);
+
+        if (settings.IsHotkeyConfigured)
+        {
+            _hotkeyService.TryRegister(helper.Handle, ShowWindow, settings.HotkeyModifiers, settings.HotkeyKey);
+        }
+
+        _ = viewModel.InitializeAsync();
+
+        Closing += (s, e) => {
+            e.Cancel = true;
+            Hide();
         };
 
         Closed += (s, e) => {
@@ -42,7 +63,7 @@ public partial class MainWindow : Window
         };
     }
 
-    private void ShowWindow()
+    public void ShowWindow()
     {
         Show();
         Activate();
@@ -55,7 +76,7 @@ public partial class MainWindow : Window
         Hide();
     }
 
-    private void Window_PreviewKeyDown(object sender, KeyEventArgs e)
+    private void Window_PreviewKeyDown(object sender, System.Windows.Input.KeyEventArgs e)
     {
         if (e.Key == Key.Escape)
         {

@@ -24,7 +24,7 @@ public class LocalSnippetRepository : ISnippetRepository
     public async Task<IEnumerable<Snippet>> GetAllSnippetsAsync()
     {
         var directory = _storageService.GetStorageDirectory();
-        var files = Directory.GetFiles(directory, "*.json");
+        var files = Directory.GetFiles(directory, "*.json", SearchOption.AllDirectories);
         var snippets = new List<Snippet>();
 
         foreach (var file in files)
@@ -32,11 +32,63 @@ public class LocalSnippetRepository : ISnippetRepository
             try
             {
                 var content = await File.ReadAllTextAsync(file, Encoding.UTF8);
-                var snippet = JsonSerializer.Deserialize<Snippet>(content);
-                if (snippet != null)
+                bool parsed = false;
+
+                // Try parsing as standard Snippet format first
+                try
                 {
-                    snippets.Add(snippet);
+                    var snippet = JsonSerializer.Deserialize<Snippet>(content);
+                    if (snippet != null && !string.IsNullOrEmpty(snippet.Id) && !string.IsNullOrEmpty(snippet.Title))
+                    {
+                        snippets.Add(snippet);
+                        parsed = true;
+                    }
                 }
+                catch { }
+
+                if (parsed) continue;
+
+                // Try parsing as VSCode snippet format
+                try
+                {
+                    // VS Code format: { "Snippet Name": { "prefix": "...", "body": [ "..." ] or "...", "description": "..." } }
+                    using var doc = JsonDocument.Parse(content);
+                    foreach (var prop in doc.RootElement.EnumerateObject())
+                    {
+                        var name = prop.Name;
+                        var detail = prop.Value;
+
+                        string prefix = detail.TryGetProperty("prefix", out var pElement) ? pElement.GetString() ?? "" : "";
+                        string description = detail.TryGetProperty("description", out var dElement) ? dElement.GetString() ?? "" : "";
+
+                        string bodyStr = "";
+                        if (detail.TryGetProperty("body", out var bElement))
+                        {
+                            if (bElement.ValueKind == JsonValueKind.Array)
+                            {
+                                var lines = bElement.EnumerateArray().Select(x => x.GetString() ?? "").ToList();
+                                bodyStr = string.Join(Environment.NewLine, lines);
+                            }
+                            else if (bElement.ValueKind == JsonValueKind.String)
+                            {
+                                bodyStr = bElement.GetString() ?? "";
+                            }
+                        }
+
+                        if (!string.IsNullOrEmpty(bodyStr))
+                        {
+                            snippets.Add(new Snippet
+                            {
+                                Id = Guid.NewGuid().ToString(),
+                                Title = name,
+                                Description = string.IsNullOrEmpty(description) ? prefix : description,
+                                Content = bodyStr,
+                                Tags = prefix
+                            });
+                        }
+                    }
+                }
+                catch { }
             }
             catch
             {
