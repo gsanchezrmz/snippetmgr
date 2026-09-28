@@ -24,7 +24,7 @@ public class ClipboardManagerTests
         mockClipboard.Setup(c => c.SetText(It.IsAny<string>())).Callback<string>(s => clipboardState = s);
 
         var manager = new ClipboardManager(mockParser.Object, mockClipboard.Object);
-        var snippet = new Snippet { Content = "Some Snippet" };
+        var snippet = new Snippet { Code = "Some Snippet" };
 
         // Act
         await manager.InjectSnippetAsync(snippet);
@@ -49,7 +49,7 @@ public class ClipboardManagerTests
         mockClipboard.Setup(c => c.SetText(It.IsAny<string>())).Callback<string>(s => clipboardState = s);
 
         var manager = new ClipboardManager(mockParser.Object, mockClipboard.Object);
-        var snippet = new Snippet { Content = "Some Snippet" };
+        var snippet = new Snippet { Code = "Some Snippet" };
 
         // Act
         await manager.InjectSnippetAsync(snippet);

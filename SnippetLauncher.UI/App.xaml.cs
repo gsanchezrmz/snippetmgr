@@ -1,5 +1,6 @@
 using System;
 using System.Windows;
+using SnippetLauncher.Infrastructure.Repositories;
 using SnippetLauncher.Infrastructure.Services;
 using Forms = System.Windows.Forms;
 
@@ -11,6 +12,8 @@ public partial class App : System.Windows.Application
     private MainWindow? _mainWindow;
     private readonly SettingsService _settingsService = new();
     private readonly HotkeyService _hotkeyService = new();
+    private SQLiteSnippetRepository? _repository;
+    private SmartImportService? _importService;
 
     protected override void OnStartup(StartupEventArgs e)
     {
@@ -18,8 +21,11 @@ public partial class App : System.Windows.Application
 
         var settings = _settingsService.GetSettings();
 
-        // Pass dependencies so the App controls the hotkey service lifecycle
-        _mainWindow = new MainWindow(_settingsService, _hotkeyService);
+        var storage = new LocalStorageService(settings.SnippetsPath);
+        _repository = new SQLiteSnippetRepository(storage);
+        _importService = new SmartImportService(_repository);
+
+        _mainWindow = new MainWindow(_settingsService, _hotkeyService, _repository);
 
         _notifyIcon = new Forms.NotifyIcon();
         _notifyIcon.Icon = System.Drawing.SystemIcons.Application;
@@ -41,10 +47,10 @@ public partial class App : System.Windows.Application
 
     private void ShowSettings()
     {
-        if (_mainWindow != null)
+        if (_mainWindow != null && _repository != null && _importService != null)
         {
             var helper = new System.Windows.Interop.WindowInteropHelper(_mainWindow);
-            var settingsWindow = new SettingsWindow(_settingsService, _hotkeyService, helper.Handle);
+            var settingsWindow = new SettingsWindow(_settingsService, _hotkeyService, _importService, _repository, helper.Handle);
             settingsWindow.ShowDialog();
         }
     }

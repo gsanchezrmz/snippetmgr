@@ -45,7 +45,7 @@
                 <ScrollViewer VerticalScrollBarVisibility="Auto">
                     <TextBlock x:Name="PreviewText" Padding="10" Foreground="White"
                                TextWrapping="Wrap" FontFamily="Consolas"
-                               Text="{Binding SelectedSnippet.Content}"/>
+                               Text="{Binding SelectedSnippet.Code}"/>
                 </ScrollViewer>
             </Border>
         </Grid>

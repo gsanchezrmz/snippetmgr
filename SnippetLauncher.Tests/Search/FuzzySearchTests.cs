@@ -16,11 +16,11 @@ public class FuzzySearchTests
         // Arrange
         var testDir = System.IO.Path.Combine(System.IO.Path.GetTempPath(), "SnippetLauncherTests", System.Guid.NewGuid().ToString());
         var storage = new TestStorageService(testDir);
-        var repo = new LocalSnippetRepository(storage);
+        var repo = new SQLiteSnippetRepository(storage);
 
-        await repo.SaveSnippetAsync(new Snippet { Title = "Entity Framework Core Setup", Description = "EF Core configuration" });
-        await repo.SaveSnippetAsync(new Snippet { Title = "ASP.NET Core Middleware", Description = "Custom middleware" });
-        await repo.SaveSnippetAsync(new Snippet { Title = "React Hooks Component", Description = "useEffect and useState" });
+        await repo.SaveSnippetAsync(new Snippet { Title = "Entity Framework Core Setup", Tags = "EF Core configuration" });
+        await repo.SaveSnippetAsync(new Snippet { Title = "ASP.NET Core Middleware", Tags = "Custom middleware" });
+        await repo.SaveSnippetAsync(new Snippet { Title = "React Hooks Component", Tags = "useEffect and useState" });
 
         // Act
         var results = (await repo.SearchSnippetsAsync("core setup")).ToList();

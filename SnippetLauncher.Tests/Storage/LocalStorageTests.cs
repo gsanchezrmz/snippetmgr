@@ -35,30 +35,30 @@ public class LocalStorageTests : IDisposable
     public async Task SnippetStorage_SaveNew_WritesToLocalDriveAsPlainText()
     {
         // Arrange
-        var repository = new LocalSnippetRepository(_storageService);
+        var repository = new SQLiteSnippetRepository(_storageService);
         var snippet = new Snippet
         {
             Title = "Test Snippet",
-            Content = "Console.WriteLine(\"Hello\");"
+            Code = "Console.WriteLine(\"Hello\");"
         };
 
         // Act
         await repository.SaveSnippetAsync(snippet);
 
         // Assert
-        var files = Directory.GetFiles(_testDir, "*.json");
+        var files = Directory.GetFiles(_testDir, "*.db");
         files.Should().HaveCount(1);
 
-        var content = await File.ReadAllTextAsync(files[0]);
-        content.Should().Contain("Test Snippet");
-        content.Should().Contain("Console.WriteLine");
+        var snippets = await repository.GetAllSnippetsAsync();
+        snippets.Should().HaveCount(1);
+        snippets.First().Title.Should().Be("Test Snippet");
     }
 
     public void Dispose()
     {
         if (Directory.Exists(_testDir))
         {
-            Directory.Delete(_testDir, true);
+            try { Directory.Delete(_testDir, true); } catch { }
         }
     }
 }

@@ -1,0 +1,9 @@
+SELECT name
+FROM sys.objects
+WHERE type = 'P'
+AND DATEDIFF(D,modify_date, GETDATE()) < 7
+----Change 7 to any other day value
+SELECT name
+FROM sys.objects
+WHERE type = 'P'
+AND DATEDIFF(D,create_date, GETDATE()) < 7

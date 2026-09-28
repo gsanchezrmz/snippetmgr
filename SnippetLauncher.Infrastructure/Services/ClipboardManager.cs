@@ -204,7 +204,7 @@ public class ClipboardManager : IClipboardManager
         }
 
         // 2. Parse variables
-        var parsedContent = _parser.Parse(snippet.Content, currentClipboard);
+        var parsedContent = _parser.Parse(snippet.Code, currentClipboard);
 
         // 3. Set clipboard to parsed snippet
         _systemClipboard.SetText(parsedContent);

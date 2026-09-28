@@ -5,6 +5,7 @@ using System.Linq;
 using System.Net.Http;
 using System.Threading.Tasks;
 using FluentAssertions;
+using Microsoft.Data.Sqlite;
 using Moq;
 using SnippetLauncher.Core.Models;
 using SnippetLauncher.Core.ViewModels;
@@ -14,10 +15,11 @@ using Xunit;
 
 namespace SnippetLauncher.Tests.Integration;
 
-public class IntegrationTest_DownloadExtractAndSearch : IAsyncLifetime
+public class IntegrationTest_DownloadImportAndSearch : IAsyncLifetime
 {
     private string _tempDir = string.Empty;
     private string _zipPath = string.Empty;
+    private SqliteConnection _keepAliveConnection = null!;
 
     public async Task InitializeAsync()
     {
@@ -42,21 +44,33 @@ public class IntegrationTest_DownloadExtractAndSearch : IAsyncLifetime
         }
         catch
         {
-            // If download fails (e.g. 404 because extension version changed), create a dummy zip with a dummy structure
             CreateDummyVsix(_zipPath);
         }
 
         ZipFile.ExtractToDirectory(_zipPath, _tempDir, overwriteFiles: true);
+
+        // Maintain in-memory db across tests/methods
+        _keepAliveConnection = new SqliteConnection($"Data Source=E2ETest_{Guid.NewGuid()};Mode=Memory;Cache=Shared");
+        _keepAliveConnection.Open();
     }
 
     private void CreateDummyVsix(string zipPath)
     {
         var dummyDir = Path.Combine(Path.GetTempPath(), Guid.NewGuid().ToString());
         Directory.CreateDirectory(dummyDir);
-        var snippetsDir = Path.Combine(dummyDir, "extension", "snippets");
+
+        var packageJson = @"{
+            ""contributes"": {
+                ""snippets"": [
+                    { ""language"": ""python"", ""path"": ""snippets/snippets.json"" }
+                ]
+            }
+        }";
+        File.WriteAllText(Path.Combine(dummyDir, "package.json"), packageJson);
+
+        var snippetsDir = Path.Combine(dummyDir, "snippets");
         Directory.CreateDirectory(snippetsDir);
 
-        // Mock a VS Code snippet format
         var dummyVsCodeSnippet = @"{
             ""read delta"": {
                 ""prefix"": ""read delta"",
@@ -73,18 +87,18 @@ public class IntegrationTest_DownloadExtractAndSearch : IAsyncLifetime
     }
 
     [Fact]
-    public async Task IntegrationTest_DownloadExtractAndSearch_VSCodeVsixSnippet()
+    public async Task IntegrationTest_DownloadImportAndSearch_VSCodeVsixSnippet()
     {
         var extensionDir = Path.Combine(_tempDir, "extension");
+        var scanDir = Directory.Exists(extensionDir) ? extensionDir : _tempDir;
 
-        // Look for snippets directory or fallback to extension root
-        var snippetsDir = Directory.Exists(Path.Combine(extensionDir, "snippets"))
-            ? Path.Combine(extensionDir, "snippets")
-            : extensionDir;
+        var repository = new SQLiteSnippetRepository(_keepAliveConnection.ConnectionString);
+        var importService = new SmartImportService(repository);
 
-        var storage = new LocalStorageService(snippetsDir);
-        var repository = new LocalSnippetRepository(storage);
+        // 1. Run Smart Import directly from the extracted vsix root
+        var importResult = await importService.ImportFromDirectoryAsync(scanDir);
 
+        // 2. Setup ViewModel
         var mockClipboard = new Mock<ISystemClipboard>();
         var clipboardState = "Initial";
         mockClipboard.Setup(c => c.ContainsText()).Returns(true);
@@ -97,7 +111,6 @@ public class IntegrationTest_DownloadExtractAndSearch : IAsyncLifetime
         await vm.InitializeAsync();
 
         // Act
-        // There should be a "read delta" snippet in the databricks extension or our fallback dummy
         vm.SearchQuery = "read delta";
         await Task.Delay(100);
 
@@ -115,9 +128,12 @@ public class IntegrationTest_DownloadExtractAndSearch : IAsyncLifetime
 
     public Task DisposeAsync()
     {
+        _keepAliveConnection?.Close();
+        _keepAliveConnection?.Dispose();
+
         if (Directory.Exists(_tempDir))
         {
-            Directory.Delete(_tempDir, true);
+            try { Directory.Delete(_tempDir, true); } catch { }
         }
         return Task.CompletedTask;
     }

@@ -35,4 +35,9 @@
     <ProjectReference Include="..\SnippetLauncher.Infrastructure\SnippetLauncher.Infrastructure.csproj" />
   </ItemGroup>
 
+  <ItemGroup>
+    <None Update="TestResources\**\*">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </None>
+  </ItemGroup>
 </Project>

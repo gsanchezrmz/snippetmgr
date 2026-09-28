@@ -14,13 +14,14 @@ public partial class MainWindow : Window
     private readonly HotkeyService _hotkeyService;
     private readonly ISettingsService _settingsService;
 
-    // Parameterless constructor needed for XAML designer (if strictly needed, though we can omit if careful)
     public MainWindow()
     {
         InitializeComponent();
+        _hotkeyService = new HotkeyService();
+        _settingsService = new SettingsService();
     }
 
-    public MainWindow(ISettingsService settingsService, HotkeyService hotkeyService)
+    public MainWindow(ISettingsService settingsService, HotkeyService hotkeyService, ISnippetRepository repository)
     {
         InitializeComponent();
         _settingsService = settingsService;
@@ -28,9 +29,6 @@ public partial class MainWindow : Window
 
         var settings = _settingsService.GetSettings();
 
-        // Custom storage if path configured, otherwise default
-        var storage = new LocalStorageService(settings.SnippetsPath);
-        var repository = new LocalSnippetRepository(storage);
         var clipboardManager = new ClipboardManager(new VariableParser(), new SystemClipboard());
 
         var viewModel = new MainViewModel(repository, clipboardManager)
@@ -65,6 +63,10 @@ public partial class MainWindow : Window
 
     public void ShowWindow()
     {
+        if (DataContext is MainViewModel vm)
+        {
+            _ = vm.InitializeAsync(); // Refresh in case settings modified
+        }
         Show();
         Activate();
         SearchBox.Focus();
